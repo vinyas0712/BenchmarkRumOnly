@@ -11,11 +11,24 @@
   <script defer src='https://portalstage.catchpoint.com/jp/93824/latest/InitialLoadScript.js'></script>
   <!-- <script type="application/javascript" src="rprofiler.js"></script> -->
 
-  <script language="javascript" type="text/javascript">
+  <script>
+    // Initialize the queue
+    window.CPRUMDataLayer = window.CPRUMDataLayer || [];
+    function cpRumTag() {
+      CPRUMDataLayer.push(arguments);
+    }
+
+    // Queue some events before the "real library" is loaded
+    
+    cpRumTag( 'tracepoint', 'tracet', Benchmarkapp);
+  </script>
+
+
+  <!--<script language="javascript" type="text/javascript">
 function init() {
     window.RProfiler.addInfo('tracepoint', 'tracet1', 'Benchmarkapp');
 }
-window.RProfiler ? init() : window.addEventListener("GlimpseLoaded", init);
+window.RProfiler ? init() : window.addEventListener("GlimpseLoaded", init);-->
 </script>
 <script language="javascript" type="text/javascript">
 function init() {
