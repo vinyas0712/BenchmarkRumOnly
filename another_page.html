@@ -1,35 +1,29 @@
+
 <!DOCTYPE HTML>
 <html>
-
 <head>
   <title>black_white - another page</title>
   <meta name="description" content="website description" />
   <meta name="keywords" content="website keywords, website keywords" />
   <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
   <link rel="stylesheet" type="text/css" href="./style/style.css" title="style" />
-  <script defer src='https://portalstage.catchpoint.com/jp/93824/v4.0.12/InitialLoadScript.js'></script>
-  
-
-<!----The following code changes the beacon from unload/beforeunload to pageHide -->
- <script language="javascript" type="text/javascript">
-if (window.RProfiler) {
-    window.RProfiler.usePageHide();
-} else {
-    window.addEventListener('GlimpseLoaded', () => window.RProfiler.usePageHide());
-}
-</script> 
+  <script defer src='https://portalstage.catchpoint.com/jp/93824/latest/InitialLoadScript.js'></script>
+  <!---The following code changes the beacon from unload/beforeunload to pageHide -->
+  <script language="javascript" type="text/javascript">
+    if (window.RProfiler) {
+      window.RProfiler.usePageHide();
+    } else {
+      window.addEventListener('GlimpseLoaded', () => window.RProfiler.usePageHide());
+    }
+  </script>
   <!-- <script type="application/javascript" src="rprofiler.js"></script> -->
-
-
   <script language="javascript" type="text/javascript">
     function init() {
       window.RProfiler.excludeBenchMarks();
     }
     window.RProfiler ? init() : window.addEventListener("GlimpseLoaded", init);
   </script>
-  
 </head>
-
 <body>
   <div id="main">
     <div id="header">
@@ -94,9 +88,92 @@ if (window.RProfiler) {
       </div>
     </div>
     <div id="footer">
-      Copyright &copy; black_white | <a href="http://validator.w3.org/check?uri=referer">HTML5</a> | <a href="http://jigsaw.w3.org/css-validator/check/referer">CSS</a> | <a href="http://www.html5webtemplates.co.uk">Free CSS Templates</a>
+      Copyright © black_white \
+      <a href="http://validator.w3.org/check?uri=referer">HTML5</a> \
+      <a href="http://jigsaw.w3.org/css-validator/check/referer">CSS</a> \
+      <a href="http://www.html5webtemplates.co.uk">Free CSS Templates</a>
     </div>
   </div>
+
+  <!-- ========= NS Degrader Injection (JS-only, no SW) ========= -->
+  <script>
+  (function () {
+    // ---- Runtime controls via query params ----
+    // ?nsdev=on&loss=0.35&delay=800&jitter=300&match=%5E%2Fping%5C.txt$&paths=(benchmark|lastmile|another_page\\.html)
+    const q = new URLSearchParams(location.search);
+    const ENABLED = (q.get('nsdev') || 'on') === 'on';
+    const LOSS = Math.max(0, Math.min(1, parseFloat(q.get('loss') || '0.25')));     // 25% failures
+    const DELAY = parseInt(q.get('delay') || '600', 10);                            // base delay (ms)
+    const JITTER = parseInt(q.get('jitter') || '250', 10);                          // +/- jitter (ms)
+    const MATCH = new RegExp(q.get('match') || '^/ping\\.txt$');                    // which paths to degrade
+    const PATH_FILTER = new RegExp(q.get('paths') || '(benchmark|lastmile|another_page\\.html)'); // where to run
+
+    if (!ENABLED || !PATH_FILTER.test(location.pathname)) {
+      console.log('[NSDEV] disabled on this path or via params.');
+      return;
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function shouldDegrade(urlLike) {
+      try {
+        const u = new URL(typeof urlLike === 'string' ? urlLike : urlLike.url || '', location.origin);
+        if (u.origin !== location.origin) return false;           // only same-origin
+        return MATCH.test(u.pathname);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // ---- fetch() monkeypatch ----
+    const _fetch = window.fetch.bind(window);
+    window.fetch = async function(input, init = {}) {
+      const urlStr = (typeof input === 'string') ? input : (input && input.url) || '';
+      if (shouldDegrade(urlStr)) {
+        const jitter = (Math.random() * 2 - 1) * JITTER;
+        const wait = Math.max(0, DELAY + jitter);
+        await sleep(wait);
+        if (Math.random() < LOSS) {
+          // Non-OK response so your measurement counts it as a failure
+          return new Response('Simulated network failure', { status: 599, statusText: 'NSDEV_FAIL' });
+        }
+      }
+      // Prevent cache skew affecting RTT
+      const merged = Object.assign({ cache: 'no-store', credentials: 'same-origin' }, init || {});
+      return _fetch(input, merged);
+    };
+
+    // ---- XMLHttpRequest monkeypatch (covers libraries using XHR) ----
+    const _open = XMLHttpRequest.prototype.open;
+    const _send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(method, url) {
+      this.__nsdevUrl = url;
+      return _open.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function(body) {
+      if (shouldDegrade(this.__nsdevUrl)) {
+        const xhr = this;
+        const jitter = (Math.random() * 2 - 1) * JITTER;
+        const wait = Math.max(0, DELAY + jitter);
+        const willFail = Math.random() < LOSS;
+        setTimeout(function() {
+          if (willFail) {
+            try { xhr.abort(); } catch (e) {}
+          } else {
+            _send.call(xhr, body);
+          }
+        }, wait);
+        return; // Defer actual send or abort after delay
+      }
+      return _send.call(this, body);
+    };
+
+    console.log('[NSDEV] enabled. match=', MATCH, 'loss=', LOSS, 'delay=', DELAY, 'jitter=', JITTER);
+  })();
+  </script>
+  <!-- ========= /NS Degrader Injection ========= -->
+
   <script type="application/javascript" src="main.js"></script>
 </body>
 </html>
+``
